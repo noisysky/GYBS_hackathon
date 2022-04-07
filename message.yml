@@ -1,0 +1,2 @@
+message: -i /bil/users/noisysky/194061_red_mm_SLA.nii.gz -o /bil/users/noisysky/brainreg_output -v 10 10 10 --orientation sla
+
