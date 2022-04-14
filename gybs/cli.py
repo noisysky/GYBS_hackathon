@@ -62,11 +62,11 @@ def pre_process(img):
     for x in range(img.shape[-1]):
         if x % 10 == 0:
             print(f"{x} of {img.shape[-1]}")
-        sl = img[:, :, x]
-        foreground_mask = subtract_background_coronal_plane(sl)
-        sl_fft = fft_2d_stripes_filter(sl)
-        sl_fft[foreground_mask == 0] = 0
-        img_fft[:, :, x] = sl_fft
+        coronal_slice = img[:, :, x]
+        foreground_mask = subtract_background_coronal_plane(coronal_slice)
+        slice_fft = fft_2d_notch_filter(coronal_slice)
+        slice_fft[foreground_mask == 0] = 0
+        img_fft[:, :, x] = slice_fft
     return img_fft
 
 
