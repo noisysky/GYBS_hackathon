@@ -125,43 +125,87 @@ def subtract_background_coronal_plane(img):
 
 def calculate_first_harmonic(image):
     """
-    Calculate as argmax().
+    Calculate as argmax() of FFT computed on 2D image integrated over axis perpendicular to stripes.
     """
-    quant_5 = np.quantile(image.astype(np.float32), 0.05, axis=0)
-    r_fft_transf = np.fft.rfft(quant_5)/quant_5.shape[0]
-    first_harmonic = np.argmax(abs(r_fft_transf)[5:]) + 5
+    img_sum = np.sum(image, axis=1)
+    fft_seq = np.abs(np.fft.rfft(img_sum))/img_sum.shape[0]
+    first_harmonic = np.argmax(fft_seq[10:]) + 10
     return first_harmonic
 
 
-def fft_2d_stripes_filter(image):
+def ideal_notch_filter(fshift, points):
+    d0 = 5.0  # cutoff frequency
+    H, W = fshift.shape
+    u, v = np.ogrid[:H, :W]
+    for d in range(len(points)):
+        u0, v0 = points[d]
+        mask1 = (u - u0)**2 + (v - v0)**2 <= d0
+        mask2 = (u + u0)**2 + (v + v0)**2 <= d0
+        fshift[mask1] = 0
+        fshift[mask2] = 0
+    return fshift
+
+
+def gaussian_notch_filter(fft_shift_img, points):
+    d0 = 55  # cutoff frequency
+    H, W = fft_shift_img.shape
+    u, v = np.ogrid[:H, :W]
+    for d in range(len(points)):
+        u0, v0 = points[d]
+        d1 = ((u - u0)**2 + (v - v0)**2)**0.5
+        d2 = ((u + u0)**2 + (v + v0)**2)**0.5
+        fft_shift_img[u,v] *= (1 - np.exp(-0.5 * (d1 * d2 / d0**2)))
+
+    return fft_shift_img
+
+
+def fft_2d_notch_filter(image, stripes_direction="h"):
+    """
+    Remove points corresponding to stripes in the 2D FFT plane using notch filter.
+
+    stripes_direction: "h" (horizontal stripes) or "v" (vertical stripes)
+    in fMOST data stripes are horizontal
+    """
     image_dtype = image.dtype
+    image = image.astype(np.float32)
     first_harmonic = calculate_first_harmonic(image)
     H, W = image.shape
-    img_fft = np.fft.fft2(image.astype(np.float32))/(W * H)
+
+    # do 2D fft
+    img_fft = np.fft.fft2(image.astype(np.float32)) / (W * H)
+    # shift fft to get maximum at the center
     img_fft = np.fft.fftshift(img_fft)
 
-    mask = np.ones_like(img_fft).astype(np.uint8)
-    mask[H // 2 - 1, :] = 0  # Removing horizontal line in the middle
-    mask[H // 2, :] = 0  # Removing horizontal line in the middle
-    mask[H // 2 + 1, :] = 0  # Removing horizontal line in the middle
+    # filter shifted fft
+    points = []
+    image_center = (H // 2, W // 2)
+    print("Image center", image_center)
+    if stripes_direction == "h":
+        # compute points on vertical axis of symmetry
+        for point_ind in range(1, image_center[0] // first_harmonic):
+            points.extend([
+                [image_center[0] + point_ind * first_harmonic, image_center[1]],
+                [image_center[0] - point_ind * first_harmonic, image_center[1]]
+            ])
+    elif stripes_direction == "v":
+        # compute points on horizontal axis of symmetry
+        for point_ind in range(1, image_center[1] // first_harmonic):
+            points.extend([
+                [image_center[0], image_center[1] + point_ind * first_harmonic],
+                [image_center[0], image_center[1] - point_ind * first_harmonic]
+            ])
+    else:
+        raise NotImplemented("Can only automatically remove vertical or horizontal stripes")
+    points = np.asarray(points)
 
-    mask[:, W // 2 - 1] = 0  # Removing vertical line in the middle
-    mask[:, W // 2] = 0  # Removing vertical line in the middle
-    mask[:, W // 2 + 1] = 0  # Removing vertical line in the middle
+    filtered_fft_shift = ideal_notch_filter(img_fft, points)
+    # filtered_fft_shift = gaussian_notch_filter(img_fft, points)  # slower but slightly better quality
 
-    mask[H // 2 - 1, W // 2 - first_harmonic // 2 + 1 : W // 2 + first_harmonic // 2 - 1] = 1  # Retaining central region intact
-    mask[H // 2, W // 2 - first_harmonic // 2 + 1 : W // 2 + first_harmonic // 2 - 1] = 1  # Retaining central region intact
-    mask[H // 2 + 1, W // 2 - first_harmonic // 2 + 1 : W // 2 + first_harmonic // 2 - 1] = 1  # Retaining central region intact
-
-    mask[H // 2 - first_harmonic + 1 : H // 2 + first_harmonic - 1, W // 2 - 1] = 1  # Retaining central region intact
-    mask[H // 2 - first_harmonic + 1 : H // 2 + first_harmonic - 1, W // 2] = 1  # Retaining central region intact
-    mask[H // 2 - first_harmonic + 1 : H // 2 + first_harmonic - 1, W // 2 + 1] = 1  # Retaining central region intact
-
-    img_fft[mask == 0] = 0
-    img_fft = np.fft.ifftshift(img_fft)
+    # unshift
+    img_fft = np.fft.ifftshift(filtered_fft_shift)
+    # do inverse fft
     out_ifft = np.fft.ifft2(img_fft)
-    image = (np.real(out_ifft) * W * H).astype(image_dtype)
-
+    image = (np.abs(out_ifft) * W * H).astype(image_dtype)
     return image
 
 
