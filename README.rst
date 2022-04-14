@@ -1,7 +1,9 @@
 ====
-GYBS
+Adaptation of brainreg for Get Your Brain Straight hackathon
 ====
 
+A package to support the following contribution:
+https://github.com/InsightSoftwareConsortium/GetYourBrainStraight/tree/main/HCK01_2022_Virtual/ReproducibleResource/IanaVasylieva
 
 .. image:: https://img.shields.io/pypi/v/gybs.svg
         :target: https://pypi.python.org/pypi/gybs
@@ -14,19 +16,28 @@ GYBS
         :alt: Documentation Status
 
 
-
-
-Get Your Brain Straight hackathon
-
-
 * Free software: BSD license
-* Documentation: https://gybs.readthedocs.io.
 
+This package uses **brainreg** open-source image registration software: https://github.com/brainglobe/brainreg
 
-Features
---------
+Installation (standalone)
+*************************
+::
 
-* TODO
+    conda create -y -n brainreg python=3.8
+    conda activate brainreg
+    git clone https://github.com/noisysky/GYBS_hackathon.git
+    cd GYBS_hackathon
+    pip install -r requirements.txt
+
+Usage (standalone)
+******************
+::
+
+    gybs -i /path/to/input_img.nii.gz -o /path/to/output_folder -v 10 10 10 --orientation sla
+
+refer to **brainreg** documentation: https://docs.brainglobe.info/brainreg/tutorial
+
 
 Credits
 -------
